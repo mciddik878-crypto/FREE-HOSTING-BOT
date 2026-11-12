@@ -2498,7 +2498,8 @@ async def keep_alive():
     while True:
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url + '/health', timeout=aiohttp.ClientTimeout(total=20)) as r:
+                async with session.get(url.rstrip('/') + '/healthz',
+                                       timeout=aiohttp.ClientTimeout(total=20)) as r:
                     logger.info(f"Keep-alive ping: {r.status}")
         except Exception as e:
             logger.warning(f"Keep-alive failed: {e}")
@@ -2510,18 +2511,22 @@ async def web_server():
     async def health(request):
         return web.Response(text="ok")
     
-    app.router.add_get('/', landing_page)
+    # Render Health Check Path: configure Render to use /healthz.
+    # Keep /health as a backwards-compatible alias.
+    app.router.add_get('/healthz', health)
     app.router.add_get('/health', health)
+    app.router.add_get('/', landing_page)
     app.router.add_get('/admin', admin_page)
     app.router.add_get('/admin/api', panel_api)
     app.router.add_post('/admin/action', panel_action)
     
     runner = web.AppRunner(app)
     await runner.setup()
-    port = int(os.getenv('PORT', 5000))
+    # Render injects PORT (commonly 10000). Bind to all interfaces.
+    port = int(os.getenv('PORT', '10000'))
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    logger.info(f"🌐 Web server started on port {port}")
+    logger.info("🌐 Web server started on 0.0.0.0:%s; health endpoints: /healthz, /health", port)
 
 
 async def timed_ban_expiry_worker():
